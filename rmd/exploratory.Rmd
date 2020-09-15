@@ -1,0 +1,125 @@
+---
+title: "EDA"
+author: "Jin Chen"
+date: "9/10/2020"
+output: html_document
+---
+
+```{r Load libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(readxl)
+library(skimr)
+```
+
+```{r Load data}
+QVI_behaviour <- read_csv("../data/QVI_purchase_behaviour.csv")
+QVI_transact <- read_xlsx("../data/QVI_transaction_data.xlsx")
+```
+
+```{r Data Cleaning}
+QVI_behaviour <- QVI_behaviour %>% 
+  mutate(LYLTY_CARD_NBR = as.double(as.character(LYLTY_CARD_NBR)),
+         PREMIUM_CUSTOMER = as.factor(as.character(PREMIUM_CUSTOMER)),
+         LIFESTAGE = as.factor(as.character(LIFESTAGE)))
+```
+
+
+
+```{r Behaviour, fig.width=10, fig.height=5}
+skim(QVI_behaviour)
+summary(QVI_behaviour)
+#we need to change lifestage and premium_customer to factors and loyalty card 
+
+QVI_behaviour %>% 
+  ggplot(aes(x = fct_rev(fct_infreq(LIFESTAGE)))) +
+  geom_bar() +
+  coord_flip() +
+  labs(x = "") +
+  facet_wrap(~PREMIUM_CUSTOMER)
+
+QVI_behaviour %>% 
+  ggplot(aes(x = fct_rev(fct_infreq(LIFESTAGE)))) +
+  geom_bar(aes(y = ..prop.., group = 1), stat = "count") +
+  coord_flip() +
+  labs(x = "") +
+  facet_wrap(~PREMIUM_CUSTOMER) +
+  scale_y_continuous(labels = scales::percent_format())
+
+
+```
+
+We only want to look at chip behavior
+
+
+```{r QVI_transact}
+str(QVI_transact)
+summary(QVI_transact)
+
+#format date
+QVI_transact <- QVI_transact %>% 
+  mutate(DATE = as.Date(DATE, origin = "1899-12-30")) 
+
+#look at outliers
+QVI_transact %>% 
+  filter(PROD_QTY == 200)
+
+QVI_transact %>% 
+  filter(LYLTY_CARD_NBR == 226000)
+
+#Remove outliers, not a regular customer
+QVI_transact <- QVI_transact %>% 
+  filter(LYLTY_CARD_NBR != 226000)
+
+
+#lets split up the product name column so that we can extract data such as brand and weight
+QVI_transact %>% 
+  mutate(Brand = word(QVI_transact$PROD_NAME, 1, 1)) %>% 
+  count(Brand, sort = TRUE) %>% 
+  head(10) %>% 
+
+# test
+NewsData %>% 
+    mutate(teaser_3_words = stringr::word(NewsData$teaser, 1, 3)) %>% 
+    count(teaser_3_words, sort = TRUE) %>% 
+    head(10)
+
+
+```
+
+
+We must link behavior data with the transaction data in order to fully utiltize the datasets. Some questions are, which customer segments spend the most amount of money? On what products? Do they buy high volume or high amount? 
+
+1. What is the breakdown of customer segment by sales %?
+    * Total Sales
+    * Drivers of sales
+    * Where the highest sales come from
+2. What brands is the highest driver of sales?
+3. Which customer segments should we target?
+
+
+
+```{r}
+QVI_all <- QVI_transact %>%  left_join(QVI_behaviour)
+
+str(QVI_all)
+
+#breakdown of sales by lifestage and premium customer
+QVI_all %>% 
+  group_by(LIFESTAGE, PREMIUM_CUSTOMER) %>% 
+  summarize(sales = sum(TOT_SALES)) %>% 
+  arrange(desc(sales))
+
+QVI_all %>% 
+group_by(LIFESTAGE) %>% 
+  summarize(sales = sum(TOT_SALES)) %>% 
+  arrange(desc(sales))
+
+QVI_all %>% 
+group_by(PREMIUM_CUSTOMER) %>% 
+  summarize(sales = sum(TOT_SALES)) %>% 
+  arrange(desc(sales))
+
+
+```
+
+# What is the breakdown of customer segment by sales %?
