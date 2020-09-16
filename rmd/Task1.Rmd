@@ -11,6 +11,7 @@ library(readxl)
 library(skimr)
 library(ggthemes)
 library(viridis)
+library(RColorBrewer)
 
 library(data.table)
 library(ggmosaic)
@@ -404,25 +405,28 @@ As the difference in average price per unit isn't large, we can check if this di
 
 price <- data %>% 
   group_by(LIFESTAGE, PREMIUM_CUSTOMER) %>% 
-  summarize(priceperUnits = sum(TOT_SALES)/sum(PROD_QTY))
-
-priceperTransaction <- data %>% 
-  mutate(price = TOT_SALES/PROD_QTY)
-  
-
-price2 %>% 
-  group_by(PREMIUM_CUSTOMER) %>%
-  do(broom::tidy(t.test(priceperUnits ~ PREMIUM_CUSTOMER, data = .)))
+  summarize(avgpriceperUnit = sum(TOT_SALES)/sum(PROD_QTY)) %>% 
+  mutate(Label = case_when(PREMIUM_CUSTOMER == "Mainstream" ~ "Mainstream",
+                           PREMIUM_CUSTOMER != "Mainstream" ~ "Nonmainstream")) %>% 
+  filter(LIFESTAGE %in% c("YOUNG SINGLES/COUPLES", "MIDAGE SINGLES/COUPLES"))
 
 
+# priceperTransaction <- data %>% 
+#   mutate(Price = TOT_SALES/PROD_QTY,
+#          Label = case_when(PREMIUM_CUSTOMER == "Mainstream" ~ "Mainstream",
+#                            PREMIUM_CUSTOMER != "Mainstream" ~ "Nonmainstream")) %>% 
+#   select(LIFESTAGE, PREMIUM_CUSTOMER,TOT_SALES, PROD_QTY, Price, Label) %>% 
+#   filter(LIFESTAGE %in% c("YOUNG SINGLES/COUPLES", "MIDAGE SINGLES/COUPLES"))
+# priceperTransaction
 
-
-
+infer::t_test(x = price,
+              formula = avgpriceperUnit ~ Label,
+              order = c("Mainstream", "Nonmainstream"))
+ 
 
 ```
 
-The t-test results in a p-value of XXXXXXX, i.e. the unit price for mainstream,
-young and mid-age singles and couples [ARE / ARE NOT] significantly higher than
+The t-test results in a p-value of *0.031128* (which is less than 0.05), i.e. the unit price for mainstream, young and mid-age singles and couples *ARE* significantly higher than
 that of budget or premium, young and midage singles and couples.
 
 
@@ -432,3 +436,94 @@ We might want to target customer segments that contribute the most to sales to
 retain them or further increase sales. Let's look at Mainstream - young
 singles/couples. For instance, let's find out if they tend to buy a particular
 brand of chips.
+
+We might want to target customer segments that contribute the most to sales to
+retain them or further increase sales. Let's look at Mainstream - young
+singles/couples. For instance, let's find out if they tend to buy a particular
+brand of chips.
+
+
+```{r fig.align = "center"}
+#### Deep dive into Mainstream, young singles/couples
+# Over to you! Work out if there are brands that these two customer segments prefer more than others. You could use a technique called affinity analysis or a-priori analysis (or any other method if you prefer)
+
+data %>% 
+  group_by(Brand) %>% 
+  ggplot(aes(x = Brand)) +
+  geom_bar() +
+  coord_flip()
+
+ data %>% 
+  group_by(LIFESTAGE, PREMIUM_CUSTOMER, Brand) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(x = Brand, y = count, fill = LIFESTAGE)) +
+  geom_histogram(stat = "identity", position = "dodge") +
+  facet_wrap(~PREMIUM_CUSTOMER) +
+  coord_flip()
+
+ brand <- data %>% 
+  group_by(LIFESTAGE, PREMIUM_CUSTOMER, Brand) %>% 
+  summarize(count = n()) %>% 
+  filter(LIFESTAGE == "YOUNG SINGLES/COUPLES",
+         PREMIUM_CUSTOMER == "Mainstream")
+ 
+ 
+ 
+segment1 <- data %>% 
+  filter(PREMIUM_CUSTOMER == "Mainstream" & LIFESTAGE == "YOUNG SINGLES/COUPLES")
+
+segment2 <- data %>% 
+  filter(!(PREMIUM_CUSTOMER == "Mainstream" & LIFESTAGE == "YOUNG SINGLES/COUPLES"))
+
+segment1 %>% 
+  group_by(Brand) %>% 
+  summarize(count = n()) %>% 
+  mutate(prop = count/sum(count)) %>% 
+  arrange(desc(prop)) %>% 
+  ggplot(aes(x = fct_reorder(Brand, prop), y = prop)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top Brands Bought by Mainstream - Young Singles/Couples",
+       x = " " )
+  
+
+```
+We can see that :
+The Mainstream - Yung Singles/Couples customer segment primarily buy Kettle, Doritos and Pringles with Smiths following closely behind.
+
+Let's also find out if our target segment tends to buy larger packs of chips.
+
+```{r fig.align = "center"}
+#### Preferred pack size compared to the rest of the population
+# Over to you! Do the same for pack size.
+
+segment1 %>% 
+  group_by(PACK_SIZE) %>% 
+  summarize(count = n()) %>% 
+  mutate(prop = count/sum(count),
+         PACK_SIZE = as.factor(as.integer(PACK_SIZE))) %>% 
+  arrange(desc(PACK_SIZE)) %>% 
+  ggplot(aes(x = fct_reorder(PACK_SIZE, prop, .desc = TRUE), y = prop)) +
+  geom_histogram(stat = "identity", show.legend = FALSE) +
+  theme_minimal() +
+  labs(title = "Top Sizes Bought by Mainstream - Young Singles/Couples",
+       x = " ",
+       y = "Proportion of Sales")
+  
+segment2 %>% 
+  group_by(PACK_SIZE) %>% 
+  summarize(count = n()) %>% 
+  mutate(prop = count/sum(count),
+         PACK_SIZE = as.factor(as.integer(PACK_SIZE))) %>% 
+  arrange(desc(PACK_SIZE)) %>% 
+  ggplot(aes(x = fct_reorder(PACK_SIZE, prop, .desc = TRUE), y = prop)) +
+  geom_histogram(stat = "identity", show.legend = FALSE) +
+  theme_minimal() +
+  labs(title = "Top Sizes Bought by Other Segments",
+       x = " ",
+       y = "Proportion of Sales")
+
+```
+The top preferred pack sizes for both customer segments are 175g, 150g, and 134g
+
